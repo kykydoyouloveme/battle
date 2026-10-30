@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="tl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Battleground — Map Preview</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #090e16; color: #edf5ff; min-height: 100vh; display: grid; place-items: center; }
+    .shell { width: min(100vw, 1100px); padding: 18px; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 0 0 12px; }
+    h1 { font-size: clamp(18px, 3vw, 25px); margin: 0; letter-spacing: .04em; }
+    .hud { display: flex; gap: 18px; font-weight: 700; color: #b9d9ff; }
+    .hud span b { color: white; }
+    .frame { position: relative; overflow: hidden; border: 1px solid #29405d; border-radius: 12px; box-shadow: 0 20px 70px #0009; background: #101a27; }
+    canvas { display: block; width: 100%; aspect-ratio: 16/9; cursor: crosshair; }
+    .hotbar { display:flex; justify-content:center; gap:7px; margin:10px auto 0; }
+    .slot { width:118px; min-height:54px; padding:6px 9px; border:1px solid #71839a; border-radius:7px; background:#0b111bd9; color:#c5d3e2; text-align:left; display:grid; grid-template-columns:20px 1fr; align-content:center; gap:0 6px; }
+    .slot .key { grid-row:span 2; align-self:center; color:#83bdff; font-weight:900; font-size:17px; }
+    .slot strong { font-size:13px; line-height:17px; }
+    .slot small { color:#aebed0; font-size:10px; }
+    .slot.active { border-color:#76bdff; box-shadow:0 0 0 1px #76bdff,0 0 14px #3499ff70; color:#fff; }
+    .slot.locked { opacity:.58; }
+    .overlay { position: absolute; inset: 0; display: grid; place-items: center; background: #06101bcc; text-align: center; padding: 24px; }
+    .card { max-width: 500px; }
+    .card h2 { font-size: clamp(24px, 5vw, 42px); margin: 0 0 8px; }
+    .card p { line-height: 1.55; color: #c4d3e4; margin: 8px 0 18px; }
+    button { appearance: none; border: 0; border-radius: 8px; background: #4ea1ff; color: #071321; padding: 12px 22px; font: inherit; font-weight: 800; cursor: pointer; }
+    button:hover { background: #82bdff; }
+    .help { color: #91a6bc; font-size: 13px; margin: 12px 4px 0; }
+    .toast { position:absolute; left:50%; top:16%; transform:translateX(-50%); color:#ffe58a; font-weight:900; font-size:24px; text-shadow:0 2px 8px #000; pointer-events:none; }
+    [hidden] { display:none !important; }
+    .auth-screen { position:fixed; inset:0; z-index:20; display:grid; place-items:center; padding:20px; background:radial-gradient(ellipse at 50% 20%,#1c3855,#090e16 70%); }
+    .auth-card { width:min(100%,420px); padding:30px; border:1px solid #29405d; border-radius:14px; background:#0d1724; box-shadow:0 24px 80px #0009; }
+    .auth-card h1 { margin:0 0 8px; font-size:27px; }
+    .auth-card p { color:#aabbd0; margin:0 0 22px; line-height:1.5; }
+    .auth-card label { display:block; margin:13px 0 6px; color:#d3e0ef; font-size:13px; font-weight:700; }
+    .auth-card input { width:100%; padding:12px; border:1px solid #34485f; border-radius:7px; background:#080f18; color:#fff; font:inherit; }
+    .auth-card input:focus { outline:2px solid #4ea1ff; border-color:transparent; }
+    .auth-card button[type=submit] { width:100%; margin-top:20px; }
+    .auth-switch { margin-top:18px !important; text-align:center; font-size:14px; }
+    .auth-switch button { padding:0; background:none; color:#81bdff; font-weight:700; }
+    .auth-error { min-height:20px; margin:12px 0 0 !important; color:#ff9d9d !important; font-size:13px; }
+    .account { display:flex; align-items:center; gap:10px; color:#b9d9ff; font-size:13px; }
+    .account button { padding:7px 10px; background:#263b52; color:#eaf3fc; }
+    @media (max-width:600px) { .shell { padding: 8px; } header { align-items:flex-start; flex-direction:column; } .hud { gap:12px; font-size:14px; } .hotbar { gap:4px; width:100%; } .slot { width:24%; min-height:47px; padding:4px; grid-template-columns:14px 1fr; gap:0 3px; } .slot .key { font-size:14px; } .slot strong { font-size:10px; } .slot small { font-size:9px; } }
+  </style>
+</head>
+<body>
+  <section class="auth-screen" id="authScreen">
+    <div class="auth-card">
+      <h1>🏕️ Battleground</h1>
+      <p>Sign in to enter the map preview.</p>
+      <form id="loginForm">
+        <label for="loginEmail">Email</label><input id="loginEmail" name="email" type="email" autocomplete="email" maxlength="254" required>
+        <label for="loginPassword">Password</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
+        <button type="submit">Log In</button>
+        <p class="auth-switch">New player? <button type="button" id="showRegister">Create an account</button></p>
+      </form>
+      <form id="registerForm" hidden>
+        <label for="registerName">Username</label><input id="registerName" name="username" type="text" autocomplete="username" minlength="2" maxlength="32" required>
+        <label for="registerEmail">Email</label><input id="registerEmail" name="email" type="email" autocomplete="email" maxlength="254" required>
+        <label for="registerPassword">Password (at least 8 characters)</label><input id="registerPassword" name="password" type="password" autocomplete="new-password" minlength="8" required>
+        <label for="confirmPassword">Confirm password</label><input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required>
+        <button type="submit">Register</button>
+        <p class="auth-switch">Already registered? <button type="button" id="showLogin">Log in</button></p>
+      </form>
+      <p class="auth-error" id="authMessage" role="alert"></p>
+    </div>
+  </section>
+  <main class="shell" id="gameApp" hidden>
+    <header><h1>🏕️ BATTLEGROUND · MAP PREVIEW</h1><div class="account"><span id="accountName"></span><button id="logout">Log Out</button></div><div class="hud"><span>Weapon <b id="weapon">None</b></span><span>Ammo <b id="ammo">0</b></span><span>Inventory <b id="bag">Empty</b></span></div></header>
+    <div class="frame" id="frame">
+      <canvas id="game" width="960" height="540" aria-label="First person battleground map preview"></canvas>
+      <div class="toast" id="toast"></div>
+      <div class="overlay" id="overlay"><div class="card"><h2>Battleground: Map Preview</h2><p>Explore the map, enter the houses, and pick up weapons and ammo. There are no enemies yet.</p><p><b>WASD</b> move · <b>Mouse</b> look and turn · <b>E</b> pick up · <b>1–4</b> switch weapons · <b>Right-click</b> hold to aim</p><button id="start">Enter Map</button></div></div>
+    </div>
+    <nav class="hotbar" id="hotbar" aria-label="Weapon slots">
+      <button class="slot locked" data-slot="1" disabled><span class="key">1</span><strong>Empty</strong><small>No weapon</small></button>
+      <button class="slot locked" data-slot="2" disabled><span class="key">2</span><strong>Empty</strong><small>No weapon</small></button>
+      <button class="slot locked" data-slot="3" disabled><span class="key">3</span><strong>Empty</strong><small>No weapon</small></button>
+      <button class="slot locked" data-slot="4" disabled><span class="key">4</span><strong>Empty</strong><small>No weapon</small></button>
+    </nav>
+    <p class="help">Mouse: look around (360°). If pointer lock is unavailable, click and drag inside the game. WASD: move · E: pick up loot.</p>
+  </main>
+  <script>
+  (() => {
+    const canvas = document.querySelector('#game'), ctx = canvas.getContext('2d');
+    const overlay = document.querySelector('#overlay'), ammoEl = document.querySelector('#ammo'), bagEl = document.querySelector('#bag'), weaponEl = document.querySelector('#weapon'), toast = document.querySelector('#toast');
+    const W=canvas.width,H=canvas.height,FOV=Math.PI/3,MW=24,MH=18;
+    const map=Array.from({length:MH},(_,y)=>Array.from({length:MW},(_,x)=>x===0||y===0||x===MW-1||y===MH-1?'1':'0'));
+    function house(x1,y1,x2,y2,doorSide,doorAt){for(let y=y1;y<=y2;y++)for(let x=x1;x<=x2;x++)if(x===x1||x===x2||y===y1||y===y2){let door=(doorSide==='S'&&y===y2&&x===doorAt)||(doorSide==='N'&&y===y1&&x===doorAt)||(doorSide==='E'&&x===x2&&y===doorAt)||(doorSide==='W'&&x===x1&&y===doorAt);if(!door)map[y][x]='1';}}
+    house(2,2,8,7,'S',5);house(15,2,21,8,'S',18);house(8,11,14,15,'N',11);
+    const trees=[{x:3.5,y:10.5},{x:5.5,y:12.2},{x:2.5,y:14.5},{x:6.7,y:15.3},{x:10.5,y:8.5},{x:13.2,y:9.7},{x:16.5,y:10.2},{x:19.5,y:11.3},{x:21.3,y:13.5},{x:17.3,y:15.3},{x:12.8,y:3.1},{x:22,y:5.3},{x:2,y:9}];
+    const gunData={Pistol:{cooldown:350,pellets:1,spread:.018,color:'#dce8f1'},Rifle:{cooldown:145,pellets:1,spread:.024,color:'#8be0a0'},Shotgun:{cooldown:760,pellets:8,spread:.11,color:'#ffb36b'},Sniper:{cooldown:950,pellets:1,spread:.004,color:'#bca5ff'}};
+    const loot=[]; let owned=[],ammo={Pistol:0,Rifle:0,Shotgun:0,Sniper:0},weapon=null,lastShot=0,mouseDown=false,zoom=false,player={x:11.5,y:9.5,a:-Math.PI/2,pitch:0}; let running=false,last=0,shotFlash=0,toastTimer=0,keys={};
+    function wall(x,y){const row=map[Math.floor(y)];return !row || row[Math.floor(x)] === undefined || row[Math.floor(x)] !== '0';}
+    function blocked(x,y){if(wall(x,y))return true;return trees.some(t=>Math.hypot(x-t.x,y-t.y)<.34);}
+    function indoors(){return (player.x>2&&player.x<8&&player.y>2&&player.y<7)||(player.x>15&&player.x<21&&player.y>2&&player.y<8)||(player.x>8&&player.x<14&&player.y>11&&player.y<15);}
+    function freshLoot(){return [{x:4.5,y:4.5,type:'Rifle',amount:30},{x:6.5,y:5.5,type:'Ammo',caliber:'Rifle',amount:30},{x:18.5,y:4.5,type:'Shotgun',amount:12},{x:17.4,y:6.4,type:'Ammo',caliber:'Shotgun',amount:12},{x:10.5,y:13.5,type:'Sniper',amount:8},{x:12.5,y:13.5,type:'Ammo',caliber:'Sniper',amount:8}];}
+    function viewFov(){if(!zoom)return FOV;return weapon==='Sniper'?FOV*.3:FOV*.62;}
+    function cast(angle){let d=0,step=.025; while(d<30){d+=step;let x=player.x+Math.cos(angle)*d,y=player.y+Math.sin(angle)*d;if(wall(x,y))break;}let closest={d,x:player.x+Math.cos(angle)*d,y:player.y+Math.sin(angle)*d,tile:'1'};for(const tree of trees){let dx=tree.x-player.x,dy=tree.y-player.y,along=dx*Math.cos(angle)+dy*Math.sin(angle),side=Math.abs(dx*Math.sin(angle)-dy*Math.cos(angle));if(along>0&&side<.3){let hit=along-Math.sqrt(.09-side*side);if(hit<closest.d)closest={d:hit,x:tree.x,y:tree.y,tile:'tree',tree};}}return closest;}
+    function draw(){
+      const horizon=Math.max(0,Math.min(H,H/2+player.pitch));
+      const inside=indoors(),sky=ctx.createLinearGradient(0,0,0,Math.max(1,horizon));sky.addColorStop(0,inside?'#29221c':'#172b42');sky.addColorStop(1,inside?'#514438':'#8ab4c8');ctx.fillStyle=sky;ctx.fillRect(0,0,W,horizon);
+      const floor=ctx.createLinearGradient(0,horizon,0,H);floor.addColorStop(0,inside?'#786343':'#55684a');floor.addColorStop(1,inside?'#3d3226':'#263629');ctx.fillStyle=floor;ctx.fillRect(0,horizon,W,H-horizon);
+      const depth=new Float32Array(W);
+      for(let x=0;x<W;x+=2){let a=player.a+(x/W-.5)*viewFov(),hit=cast(a),dist=hit.d*Math.cos(a-player.a);depth[x]=depth[x+1]=dist;let h=Math.min(H,H/(dist||.1)),top=(H-h)/2+player.pitch,shade=Math.max(35,195-dist*14),side=(Math.floor(hit.x*2)%2===0);if(hit.tile==='tree'){ctx.fillStyle=`rgb(${35+shade*.12|0},${65+shade*.3|0},${28+shade*.08|0})`;ctx.fillRect(x,top,2,h*.7);ctx.fillStyle=`rgb(${65+shade*.18|0},${38+shade*.1|0},${24+shade*.06|0})`;ctx.fillRect(x,top+h*.57,2,h*.43);}else{ctx.fillStyle=`rgb(${shade*(side?.78:1)|0},${shade*(side?.66:1)|0},${shade*(side?.52:1)|0})`;ctx.fillRect(x,top,2,h);}}
+      // Tree canopies give the narrow ray-cast trunks a leafy silhouette.
+      for(const tree of trees){let dx=tree.x-player.x,dy=tree.y-player.y,dist=Math.hypot(dx,dy),rel=Math.atan2(dy,dx)-player.a;while(rel>Math.PI)rel-=Math.PI*2;while(rel< -Math.PI)rel+=Math.PI*2;if(Math.abs(rel)>viewFov()*.7)continue;let sx=W/2+rel/viewFov()*W,col=Math.max(0,Math.min(W-1,Math.round(sx))),size=Math.min(250,H/(dist*.72));if(sx<0||sx>=W||dist>depth[col])continue;let cy=horizon+size*.12;ctx.fillStyle='#22452a';ctx.beginPath();ctx.arc(sx,cy,size*.31,0,Math.PI*2);ctx.fill();ctx.fillStyle='#386b38';ctx.beginPath();ctx.arc(sx-size*.14,cy-size*.06,size*.19,0,Math.PI*2);ctx.arc(sx+size*.14,cy-size*.08,size*.2,0,Math.PI*2);ctx.arc(sx,cy-size*.2,size*.2,0,Math.PI*2);ctx.fill();}
+      let nearby=null,nearDist=1.8;for(const item of loot){let dx=item.x-player.x,dy=item.y-player.y,dist=Math.hypot(dx,dy),rel=Math.atan2(dy,dx)-player.a;while(rel>Math.PI)rel-=Math.PI*2;while(rel< -Math.PI)rel+=Math.PI*2;if(dist<nearDist){nearby=item;nearDist=dist;}if(Math.abs(rel)>viewFov()*.7)continue;let sx=W/2+rel/viewFov()*W,size=Math.min(110,H/(dist*1.35));let groundY=horizon+H/(2*Math.max(.35,dist));let base=Math.max(horizon+size*.12,Math.min(H-size*.12,groundY));if(sx<0||sx>=W||dist>depth[Math.max(0,Math.min(W-1,Math.round(sx)))]||size<4)continue;ctx.save();ctx.translate(sx,base);ctx.fillStyle='#070a0d99';ctx.beginPath();ctx.ellipse(0,size*.08,size*.6,size*.14,0,0,Math.PI*2);ctx.fill();ctx.translate(0,-size*.12);if(item.type==='Ammo'){ctx.fillStyle='#d9bd65';ctx.fillRect(-size*.3,-size*.11,size*.6,size*.27);ctx.fillStyle='#f3dc8d';for(let i=0;i<3;i++)ctx.fillRect(-size*.21+i*size*.14,-size*.19,size*.07,size*.12);}else{ctx.rotate(-.08);ctx.fillStyle=gunData[item.type].color;ctx.shadowColor=ctx.fillStyle;ctx.shadowBlur=14;ctx.fillRect(-size*.48,-size*.06,size*.96,size*.12);ctx.fillRect(-size*.14,size*.04,size*.2,size*.2);ctx.fillRect(size*.12,-size*.1,size*.42,size*.09);ctx.shadowBlur=0;}ctx.font=`bold ${Math.max(12,size*.2)}px system-ui`;ctx.textAlign='center';ctx.fillStyle='white';ctx.fillText(item.type==='Ammo'?`${item.caliber} AMMO`:`${item.type.toUpperCase()}`,0,-size*.23);ctx.restore();}if(nearby){ctx.fillStyle='#fff';ctx.font='bold 17px system-ui';ctx.textAlign='center';ctx.fillText(`PRESS E TO PICK UP ${nearby.type==='Ammo'?nearby.caliber+' AMMO':nearby.type.toUpperCase()}`,W/2,H*.69);}
+      // Simple weapon silhouette
+      if(weapon){ctx.fillStyle='#151a21';ctx.beginPath();ctx.moveTo(W*.42,H);ctx.lineTo(W*.46,H*.83);ctx.lineTo(W*.54,H*.83);ctx.lineTo(W*.59,H);ctx.fill();ctx.fillStyle=gunData[weapon].color;ctx.fillRect(W*.475,H*.77,W*.05,H*.17);ctx.fillStyle='#eaf2fa';ctx.font='bold 15px system-ui';ctx.textAlign='center';ctx.fillText(weapon.toUpperCase(),W/2,H-18);}
+      if(zoom&&weapon==='Sniper'){ctx.fillStyle='#05080b99';ctx.beginPath();ctx.rect(0,0,W,H);ctx.arc(W/2,H/2,Math.min(W,H)*.43,0,Math.PI*2,true);ctx.fill('evenodd');ctx.strokeStyle='#17191c';ctx.lineWidth=12;ctx.beginPath();ctx.arc(W/2,H/2,Math.min(W,H)*.43,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='#ef594e';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(W/2-34,H/2);ctx.lineTo(W/2+34,H/2);ctx.moveTo(W/2,H/2-34);ctx.lineTo(W/2,H/2+34);ctx.stroke();}
+      else if(zoom&&weapon){ctx.strokeStyle='#e5edf4';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(W/2-13,H/2+15);ctx.lineTo(W/2-6,H/2-7);ctx.lineTo(W/2,H/2-11);ctx.lineTo(W/2+6,H/2-7);ctx.lineTo(W/2+13,H/2+15);ctx.stroke();ctx.fillStyle='#e5edf4';ctx.fillRect(W/2-2,H/2-3,4,4);}
+      else{ctx.strokeStyle='rgba(255,255,255,.85)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(W/2-11,H/2);ctx.lineTo(W/2-4,H/2);ctx.moveTo(W/2+4,H/2);ctx.lineTo(W/2+11,H/2);ctx.moveTo(W/2,H/2-11);ctx.lineTo(W/2,H/2-4);ctx.moveTo(W/2,H/2+4);ctx.lineTo(W/2,H/2+11);ctx.stroke();}
+      if(shotFlash>0){ctx.fillStyle=`rgba(255,220,120,${shotFlash*.22})`;ctx.fillRect(0,0,W,H);shotFlash=Math.max(0,shotFlash-.08);}
+    }
+    function updateHud(){weaponEl.textContent=weapon||'None';ammoEl.textContent=weapon?ammo[weapon]:0;bagEl.textContent=owned.length?owned.join(', '):'Empty';for(let i=1;i<=4;i++){const name=owned[i-1]||null,slot=document.querySelector(`[data-slot="${i}"]`);slot.querySelector('strong').textContent=name||'Empty';slot.classList.toggle('active',!!name&&weapon===name);slot.classList.toggle('locked',!name);slot.querySelector('small').textContent=name?`${ammo[name]} ammo`:'No weapon';slot.disabled=!name;}}
+    function shoot(){if(!running||!weapon||performance.now()-lastShot<gunData[weapon].cooldown)return;if(ammo[weapon]<=0){toast.textContent='OUT OF AMMO';toastTimer=40;return;}lastShot=performance.now();ammo[weapon]--;updateHud();shotFlash=1;}
+    function pickup(){let nearest=null,dist=1.35;for(const item of loot){const d=Math.hypot(item.x-player.x,item.y-player.y);if(d<dist){nearest=item;dist=d;}}if(!nearest){toast.textContent='No loot nearby';toastTimer=35;return;}if(nearest.type==='Ammo'){ammo[nearest.caliber]+=nearest.amount;toast.textContent=`+${nearest.amount} ${nearest.caliber.toUpperCase()} AMMO`;}else{weapon=nearest.type;if(!owned.includes(weapon))owned.push(weapon);ammo[weapon]+=nearest.amount;toast.textContent=`Picked up ${weapon.toUpperCase()} + ${nearest.amount} ammo`;}loot.splice(loot.indexOf(nearest),1);updateHud();toastTimer=55;}
+    function selectGun(slot){const picked=owned[slot-1];if(picked){weapon=picked;updateHud();zoom=false;}}
+    function start(){overlay.dataset.pause='';overlay.style.display='none';player={x:11.5,y:9.5,a:Math.PI/2,pitch:0};weapon=null;owned=[];ammo={Pistol:0,Rifle:0,Shotgun:0,Sniper:0};loot.splice(0,loot.length,...freshLoot());updateHud();running=true;canvas.requestPointerLock?.();last=performance.now();requestAnimationFrame(loop);}
+    function resume(){overlay.style.display='none';running=true;canvas.requestPointerLock?.();last=performance.now();requestAnimationFrame(loop);}
+    function loop(now){if(!running)return;let dt=Math.min(.05,(now-last)/1000);last=now;let speed=3*dt,nx=player.x,ny=player.y;if(keys.KeyW||keys.ArrowUp){nx+=Math.cos(player.a)*speed;ny+=Math.sin(player.a)*speed;}if(keys.KeyS||keys.ArrowDown){nx-=Math.cos(player.a)*speed;ny-=Math.sin(player.a)*speed;}if(keys.KeyA||keys.ArrowLeft){nx+=Math.cos(player.a-Math.PI/2)*speed;ny+=Math.sin(player.a-Math.PI/2)*speed;}if(keys.KeyD||keys.ArrowRight){nx+=Math.cos(player.a+Math.PI/2)*speed;ny+=Math.sin(player.a+Math.PI/2)*speed;}if(!blocked(nx,player.y))player.x=nx;if(!blocked(player.x,ny))player.y=ny;if(mouseDown)shoot();if(toastTimer>0&&!--toastTimer)toast.textContent='';draw();requestAnimationFrame(loop);}
+    let dragging=false,lastMouseX=null,lastMouseY=null;
+    window.addEventListener('auth:logout',()=>{running=false;mouseDown=false;dragging=false;zoom=false;if(document.pointerLockElement===canvas)document.exitPointerLock?.();});
+    document.querySelector('#start').addEventListener('click',()=>{if(overlay.dataset.pause==='1'){overlay.dataset.pause='';resume();}else start();});document.querySelectorAll('.slot').forEach(slot=>slot.addEventListener('click',()=>selectGun(Number(slot.dataset.slot))));canvas.addEventListener('click',()=>{if(running&&document.pointerLockElement!==canvas)canvas.requestPointerLock?.();shoot();});canvas.addEventListener('mousedown',e=>{if(e.button===0){mouseDown=true;dragging=true;lastMouseX=e.clientX;lastMouseY=e.clientY;}if(e.button===2){zoom=true;e.preventDefault();}});document.addEventListener('mouseup',e=>{if(e.button===0){mouseDown=false;dragging=false;lastMouseX=lastMouseY=null;}if(e.button===2)zoom=false;});canvas.addEventListener('contextmenu',e=>e.preventDefault());document.addEventListener('mousemove',e=>{if(!running)return;let dx=0,dy=0;if(document.pointerLockElement===canvas){dx=e.movementX;dy=e.movementY;}else if(dragging){if(lastMouseX!==null){dx=e.clientX-lastMouseX;dy=e.clientY-lastMouseY;}lastMouseX=e.clientX;lastMouseY=e.clientY;}player.a+=dx*.0025;player.pitch=Math.max(-H*.32,Math.min(H*.32,player.pitch-dy*.65));});document.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code.startsWith('Arrow'))e.preventDefault();if(e.code==='KeyE'&&!e.repeat)pickup();if(['Digit1','Digit2','Digit3','Digit4'].includes(e.code))selectGun(Number(e.code.slice(-1)));});document.addEventListener('keyup',e=>keys[e.code]=false);document.addEventListener('pointerlockchange',()=>{if(running&&document.pointerLockElement!==canvas){running=false;overlay.dataset.pause='1';overlay.style.display='grid';overlay.querySelector('h2').textContent='Paused';overlay.querySelector('p').textContent='Click the button to resume.';document.querySelector('#start').textContent='Resume';}});
+    draw();
+  })();
+  </script>
+  <script>
+  (() => {
+    const authScreen=document.querySelector('#authScreen'),gameApp=document.querySelector('#gameApp'),loginForm=document.querySelector('#loginForm'),registerForm=document.querySelector('#registerForm'),message=document.querySelector('#authMessage');
+    function showGame(user){authScreen.hidden=true;gameApp.hidden=false;document.querySelector('#accountName').textContent=user.username;}
+    function showAuth(text=''){gameApp.hidden=true;authScreen.hidden=false;message.textContent=text;}
+    function switchForm(showRegister){loginForm.hidden=showRegister;registerForm.hidden=!showRegister;message.textContent='';}
+    async function request(url,body){let response;try{response=await fetch(url,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined,credentials:'same-origin'});}catch{return {error:'Could not reach the server. Check your connection and deployment.'};}let data;try{data=await response.json();}catch{return {error:'The authentication API is not available. Deploy the Vercel API and configure the database first.'};}return response.ok?data:{error:data.error||'Request failed.'};}
+    loginForm.addEventListener('submit',async event=>{event.preventDefault();message.textContent='Signing in…';const button=loginForm.querySelector('[type=submit]');button.disabled=true;const result=await request('/api/auth/login',{email:loginForm.email.value,password:loginForm.password.value});button.disabled=false;if(result.error){message.textContent=result.error;return;}showGame(result.user);});
+    registerForm.addEventListener('submit',async event=>{event.preventDefault();if(registerForm.password.value!==registerForm.confirmPassword.value){message.textContent='Passwords do not match.';return;}message.textContent='Creating your account…';const button=registerForm.querySelector('[type=submit]');button.disabled=true;const result=await request('/api/auth/register',{username:registerForm.username.value,email:registerForm.email.value,password:registerForm.password.value});button.disabled=false;if(result.error){message.textContent=result.error;return;}showGame(result.user);});
+    document.querySelector('#showRegister').addEventListener('click',()=>switchForm(true));document.querySelector('#showLogin').addEventListener('click',()=>switchForm(false));
+    document.querySelector('#logout').addEventListener('click',async()=>{await request('/api/auth/logout',{});window.dispatchEvent(new Event('auth:logout'));showAuth();switchForm(false);});
+    request('/api/auth/me').then(result=>{if(result.user)showGame(result.user);});
+  })();
+  </script>
+</body>
+</html>
