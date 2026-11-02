@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Battleground — Map Preview</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
   <style>
     :root { color-scheme: dark; font-family: system-ui, sans-serif; }
     * { box-sizing: border-box; }
@@ -51,21 +52,8 @@
   <section class="auth-screen" id="authScreen">
     <div class="auth-card">
       <h1>🏕️ Battleground</h1>
-      <p>Sign in to enter the map preview.</p>
-      <form id="loginForm">
-        <label for="loginEmail">Email</label><input id="loginEmail" name="email" type="email" autocomplete="email" maxlength="254" required>
-        <label for="loginPassword">Password</label><input id="loginPassword" name="password" type="password" autocomplete="current-password" required>
-        <button type="submit">Log In</button>
-        <p class="auth-switch">New player? <button type="button" id="showRegister">Create an account</button></p>
-      </form>
-      <form id="registerForm" hidden>
-        <label for="registerName">Username</label><input id="registerName" name="username" type="text" autocomplete="username" minlength="2" maxlength="32" required>
-        <label for="registerEmail">Email</label><input id="registerEmail" name="email" type="email" autocomplete="email" maxlength="254" required>
-        <label for="registerPassword">Password (at least 8 characters)</label><input id="registerPassword" name="password" type="password" autocomplete="new-password" minlength="8" required>
-        <label for="confirmPassword">Confirm password</label><input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required>
-        <button type="submit">Register</button>
-        <p class="auth-switch">Already registered? <button type="button" id="showLogin">Log in</button></p>
-      </form>
+      <p>Sign in with your Google Account. Your first sign-in creates your game account automatically.</p>
+      <div id="googleButton"></div>
       <p class="auth-error" id="authMessage" role="alert"></p>
     </div>
   </section>
@@ -132,15 +120,13 @@
   </script>
   <script>
   (() => {
-    const authScreen=document.querySelector('#authScreen'),gameApp=document.querySelector('#gameApp'),loginForm=document.querySelector('#loginForm'),registerForm=document.querySelector('#registerForm'),message=document.querySelector('#authMessage');
+    const authScreen=document.querySelector('#authScreen'),gameApp=document.querySelector('#gameApp'),message=document.querySelector('#authMessage');
     function showGame(user){authScreen.hidden=true;gameApp.hidden=false;document.querySelector('#accountName').textContent=user.username;}
     function showAuth(text=''){gameApp.hidden=true;authScreen.hidden=false;message.textContent=text;}
-    function switchForm(showRegister){loginForm.hidden=showRegister;registerForm.hidden=!showRegister;message.textContent='';}
     async function request(url,body){let response;try{response=await fetch(url,{method:body?'POST':'GET',headers:body?{'Content-Type':'application/json'}:undefined,body:body?JSON.stringify(body):undefined,credentials:'same-origin'});}catch{return {error:'Could not reach the server. Check your connection and deployment.'};}let data;try{data=await response.json();}catch{return {error:'The authentication API is not available. Deploy the Vercel API and configure the database first.'};}return response.ok?data:{error:data.error||'Request failed.'};}
-    loginForm.addEventListener('submit',async event=>{event.preventDefault();message.textContent='Signing in…';const button=loginForm.querySelector('[type=submit]');button.disabled=true;const result=await request('/api/auth/login',{email:loginForm.email.value,password:loginForm.password.value});button.disabled=false;if(result.error){message.textContent=result.error;return;}showGame(result.user);});
-    registerForm.addEventListener('submit',async event=>{event.preventDefault();if(registerForm.password.value!==registerForm.confirmPassword.value){message.textContent='Passwords do not match.';return;}message.textContent='Creating your account…';const button=registerForm.querySelector('[type=submit]');button.disabled=true;const result=await request('/api/auth/register',{username:registerForm.username.value,email:registerForm.email.value,password:registerForm.password.value});button.disabled=false;if(result.error){message.textContent=result.error;return;}showGame(result.user);});
-    document.querySelector('#showRegister').addEventListener('click',()=>switchForm(true));document.querySelector('#showLogin').addEventListener('click',()=>switchForm(false));
-    document.querySelector('#logout').addEventListener('click',async()=>{await request('/api/auth/logout',{});window.dispatchEvent(new Event('auth:logout'));showAuth();switchForm(false);});
+    async function setupGoogle(){const config=await request('/api/auth/config');if(!config.clientId){message.textContent=config.error||'Google sign-in is not configured. Add GOOGLE_CLIENT_ID in Vercel settings.';return;}if(!window.google?.accounts?.id){message.textContent='Google sign-in could not load. Please refresh the page.';return;}window.google.accounts.id.initialize({client_id:config.clientId,callback:async response=>{message.textContent='Signing in with Google…';const result=await request('/api/auth/google',{credential:response.credential});if(result.error){message.textContent=result.error;return;}showGame(result.user);}});window.google.accounts.id.renderButton(document.querySelector('#googleButton'),{theme:'outline',size:'large',shape:'rectangular',text:'continue_with',width:300});}
+    window.addEventListener('load',setupGoogle,{once:true});
+    document.querySelector('#logout').addEventListener('click',async()=>{await request('/api/auth/logout',{});window.google?.accounts?.id?.disableAutoSelect();window.dispatchEvent(new Event('auth:logout'));showAuth();});
     request('/api/auth/me').then(result=>{if(result.user)showGame(result.user);});
   })();
   </script>

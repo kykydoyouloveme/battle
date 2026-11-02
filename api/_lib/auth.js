@@ -18,6 +18,7 @@ async function getUsersCollection() {
       .then(async () => {
         const users = client.db(MONGODB_DB).collection('users');
         await users.createIndex({ email: 1 }, { unique: true, name: 'users_email_unique' });
+        await users.createIndex({ googleId: 1 }, { unique: true, sparse: true, name: 'users_google_id_unique' });
         globalThis.__battlegroundUsers = users;
         return users;
       })
